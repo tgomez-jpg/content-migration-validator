@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "node scripts/run-tests.js",
-    "All-tests": "node scripts/run-tests.js"
+    "test:texts": "node scripts/run-text-test.js",
+    "Alltests": "node scripts/run-tests.js"
   },
   "keywords": [],
   "author": "",
@@ -13,6 +14,7 @@
   "type": "commonjs",
   "devDependencies": {
     "@playwright/test": "^1.62.1",
+    "diff": "^9.0.0",
     "pixelmatch": "^7.2.0",
     "pngjs": "^7.0.0"
   },
