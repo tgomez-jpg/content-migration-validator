@@ -95,7 +95,7 @@ content-migration-validator/
 
 1. **Clonar el proyecto** en tu entorno local:
    ```bash
-   git clone <url-del-repositorio>
+   git clone https://github.com/tgomez-jpg/content-migration-validator.git
    cd content-migration-validator
    ```
 
