@@ -103,9 +103,7 @@ test.describe(`Validación de migración de texto plano`, () => {
                         textOriginal,
                         textNuevo
                     );
-
                     let diffTexto = '';
-
                     for (const parte of diferencias) {
                         if (parte.added) {
                             diffTexto += `+ ${parte.value}`;
@@ -113,15 +111,12 @@ test.describe(`Validación de migración de texto plano`, () => {
                             diffTexto += `- ${parte.value}`;
                         }
                     }
-                    const nombreArchivo =
-                        obtenerNombreArchivo(item);
-
+                    const nombreArchivo = obtenerNombreArchivo(item);
                     const evidenciaDir =
                         path.join(
                             textDir,
                             nombreArchivo
                         );
-
                     fs.writeFileSync(
                         path.join(
                             evidenciaDir,
