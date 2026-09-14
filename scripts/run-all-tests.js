@@ -12,8 +12,6 @@ const env = {
     REPORT_DIR: reportDir
 };
 
-let finalExitCode = 0; // Variable para rastrear si algo falló al final
-
 // =====================================================================
 // PASO 1: Ejecutar Crawler (Solo una vez)
 // =====================================================================
