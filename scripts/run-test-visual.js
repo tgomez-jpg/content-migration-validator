@@ -29,19 +29,22 @@ if (crawl.status !== 0) {
     process.exit(crawl.status ?? 1);
 }
 
-// 2. Ejecutar pruebas
-console.log('\n🧪 Ejecutando tests de comparación...\n');
+// 2. Ejecutar prueba de comparación de Visual
+console.log('🧪 Ejecutando comparación de Visual...\n');
 
 const tests = spawnSync(
     'npx',
-    ['playwright', 'test'],
+    [
+        'playwright',
+        'test',
+        'tests/visual-diff.spec.js'
+    ],
     {
         stdio: 'inherit',
         env,
         shell: true
     }
 );
-
 if (tests.error) {
     console.error('\n❌ Error al ejecutar Playwright:');
     console.error(tests.error);
