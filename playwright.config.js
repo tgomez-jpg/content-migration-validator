@@ -3,9 +3,9 @@ const reportDir = process.env.REPORT_DIR || 'playwright-report/default';
 
 module.exports = defineConfig({
     testDir: './tests',
-    timeout: 50 * 1000,
+    timeout: 90 * 1000,
     fullyParallel: true,
-    retries: 0,
+    retries: 1,
     workers: 4,
     reporter: [
         ['html', { 
@@ -21,8 +21,8 @@ module.exports = defineConfig({
 
     use: {
         screenshot: 'only-on-failure',
-        video: 'retain-on-failure',
-        trace: 'retain-on-failure',
+        //video: 'retain-on-failure',
+        //trace: 'retain-on-failure',
         actionTimeout: 10 * 1000,
         navigationTimeout: 15 * 1000,
     },

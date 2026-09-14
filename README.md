@@ -2,101 +2,144 @@
 
 [![Node.js](https://img.shields.io/badge/Node.js-v18+-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Playwright](https://img.shields.io/badge/Playwright-v1.62+-2EAD33?logo=playwright&logoColor=white)](https://playwright.dev/)
+[![Pixelmatch](https://img.shields.io/badge/Pixelmatch-v7.2+-FF6F00?logo=javascript&logoColor=white)](https://github.com/mapbox/pixelmatch)
 [![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?logo=javascript&logoColor=black)](https://developer.mozilla.org/es/docs/Web/JavaScript)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 
-Una herramienta automatizada y profesional para la **validación y auditoría de migración de contenidos web**. Su propósito principal es asegurar que durante un proceso de migración de plataforma o rediseño no ocurra pérdida de información ni discrepancias visuales o de texto expuestas al usuario.
+Una herramienta automatizada y profesional de **QA Automation** diseñada para la **auditoría y validación de migración de contenidos web**. Su propósito fundamental es comparar un **sitio ORIGINAL (de referencia/baseline)** contra un **sitio NUEVO (migrado o rediseñado)** para certificar que no existan discrepancias visuales ni pérdidas de contenido textual antes de su liberación a producción.
 
 El sistema funciona en dos fases consecutivas y automatizadas:
 
-1. **Fase de Rastreo (Crawling):** Analiza el sitio web original de manera iterativa para mapear todas las páginas internas y generar un catálogo de URLs elegibles.
-2. **Fase de Validación (Testing):** Ejecuta pruebas de comparación automática con Playwright para extraer y contrastar el texto normalizado y el aspecto visual del sitio antiguo contra el sitio nuevo, reportando detalladamente cualquier inconsistencia.
+1. **Fase de Rastreo (Crawling):** Analiza el sitio web original de manera iterativa para descubrir todas las páginas internas elegibles, sanitizar sus URLs y generar el catálogo de rutas a probar.
+2. **Fase de Validación (Testing):** Ejecuta pruebas automatizadas y concurrentes con Playwright para extraer y contrastar el texto normalizado y el aspecto visual pixel a pixel entre ambos entornos, reportando detalladamente cualquier inconsistencia encontrada.
 
 ---
 
-## 🔄 Flujo General del Proyecto
+## 📋 Tabla de Contenidos
 
-El ciclo de vida de la ejecución está automatizado por los scripts orquestadores y se resume en el siguiente flujo secuencial:
+- [Flujo General del Sistema](#-flujo-general-del-sistema)
+- [Mejoras y Capacidades Implementadas](#-mejoras-y-capacidades-implementadas)
+  - [1. Validación Textual Inteligente](#1-validación-textual-inteligente)
+  - [2. Validación Visual Estabilizada (Pixelmatch)](#2-validación-visual-estabilizada-pixelmatch)
+- [Arquitectura del Proyecto](#-arquitectura-del-proyecto)
+- [Prerrequisitos e Instalación](#-prerrequisitos-e-instalación)
+- [Variables de Entorno](#-variables-de-entorno)
+- [Ejecución de Pruebas](#-ejecución-de-pruebas)
+- [Estructura de Reportes y Evidencias](#-estructura-de-reportes-y-evidencias)
+- [Patrones de Diseño y Buenas Prácticas QA](#-patrones-de-diseño-y-buenas-prácticas-qa)
+
+---
+
+## 🔄 Flujo General del Sistema
+
+El ciclo de ejecución está completamente automatizado por los scripts orquestadores y se resume en el siguiente diagrama:
 
 ```mermaid
 graph TD
-    A[Inicio: npm test / npm run test:texts] --> B(Cargar Configuración .env)
-    B --> C[Orquestador: run-tests.js / run-text-test.js]
-    C --> D[Fase 1: scripts/crawl.js]
+    A[Inicio: npm test / npm run test:text / npm run test:visual] --> B(Cargar Configuración .env)
+    B --> C[Orquestador: scripts/run-all-tests.js / run-test-text.js / run-test-visual.js]
+    C --> D[Paso 1: scripts/crawl.js]
     D --> E{¿Enlace Válido e Interno?}
-    E -- Sí --> F[Agregar a la Cola de Rastreo]
-    E -- No --> G[Registrar en urls_rechazadas.json]
-    F --> H{¿Hay más URLs en cola?}
-    H -- Sí --> D
-    H -- No --> I[Guardar data/urls.json]
-    I --> J[Fase 2: npx playwright test]
-    J --> K{¿Qué suite ejecutar?}
-    K -- Todas (npm test) --> L1[tests/content-diff.spec.js & tests/visual-diff.spec.js]
-    K -- Solo Textos (npm run test:texts) --> L2[tests/content-diff.spec.js]
-    L1 & L2 --> M[Leer data/urls.json]
-    M --> N[Cargar URL en Sitio Original]
-    N --> O[Cargar URL en Sitio Nuevo]
-    O --> P[Procesar Textos/Capturas]
-    P --> Q{¿Coinciden exactamente?}
-    Q -- Sí --> R[Prueba Exitosa]
-    Q -- No --> S[Prueba Fallida + Guardar Evidencia]
-    R --> T[Generar Reportes HTML/JSON en playwright-report/]
-    S --> T
-    T --> U[Fin de Ejecución]
+    E -- Sí --> F[Registrar en data/urls.json]
+    E -- No --> G[Registrar en data/urls_rechazadas.json]
+    F --> H[Paso 2: Playwright Test Runner]
+    H --> I{Modalidad de Prueba}
+    I -- npm run test:text --> J1[tests/content-diff.spec.js]
+    I -- npm run test:visual --> J2[tests/visual-diff.spec.js]
+    I -- npm test --> J3[Secuencia: Textos + Visual]
+    J1 & J2 & J3 --> K[Cargar Página en Sitio Original y Nuevo]
+    K --> L[Aplicar Estabilización: Inyección CSS / Lazy Load / Fuentes]
+    L --> M{¿Coinciden los contenidos/capturas?}
+    M -- Sí --> N[Prueba Exitosa: 0 diferencias]
+    M -- No --> O[Prueba Fallida + Guardar Evidencia Forense diff.txt / diff.png]
+    N & O --> P[Consolidar Reporte HTML & JSON en playwright-report/Fecha-Hora/]
+    P --> Q[Fin de Ejecución]
 ```
 
 ### Descripción del Flujo:
 
-1. **Inicialización:** Se leen las URLs base configuradas en el archivo `.env`.
-2. **Fase de Crawling (`crawl.js`):** Se rastrea el sitio original de manera iterativa. Las rutas válidas se guardan en `data/urls.json` y las ignoradas/rechazadas en `data/urls_rechazadas.json` detallando el motivo.
-3. **Fase de Testing (`content-diff.spec.js` / `visual-diff.spec.js`):** Playwright lee las URLs registradas y lanza las pruebas en paralelo. Abre simultáneamente el sitio original y nuevo, limpia caracteres invisibles o espaciados redundantes (para textos) o toma capturas de pantalla de los elementos (para visual) y realiza la comparación.
-4. **Reportería:** Se consolidan los resultados en un reporte HTML dinámico estructurado por fecha/hora y archivos JSON con logs detallados.
+1. **Inicialización:** Se leen las URLs base configuradas en el archivo `.env` y se genera una carpeta única de reporte basada en fecha y hora.
+2. **Fase de Rastreo (`scripts/crawl.js`):** Recorre el sitio original. Las rutas válidas se guardan en `data/urls.json` y las descartadas en `data/urls_rechazadas.json` detallando el motivo del descarte.
+3. **Fase de Testing:**
+   - **Validación de Texto (`tests/content-diff.spec.js`):** Extrae el texto del selector configurado (por defecto `main`), expande elementos colapsados, normaliza espacios y compara contra el nuevo sitio, generando `diff.txt` si hay desajustes.
+   - **Validación Visual (`tests/visual-diff.spec.js`):** Oculta elementos dinámicos, estabiliza el renderizado, fuerza lazy load, captura screenshots de alta resolución y compara a nivel de píxel con `pixelmatch`, generando `diff.png` si detecta diferencias.
+4. **Reportería y Evidencias:** Se consolidan reportes interactivos HTML y resúmenes JSON, junto con las evidencias organizadas en subcarpetas `Evidencias-Textos/` y `Evidencias-Capturas/`.
+
+---
+
+## 🌟 Mejoras y Capacidades Implementadas
+
+### 1. Validación Textual Inteligente
+
+- **Expansión Automática de Contenido Oculto/Colapsado:** Mediante la inyección de estilos `EXPAND_HIDDEN_CONTENT_CSS`, se fuerza la apertura de acordeones (`.collapse`, `.collapsing`, `[class*="collapse"]`) y etiquetas `<details:not([open])>`. Esto garantiza que los textos dentro de componentes interactivos se extraigan sin requerir eventos de clic.
+- **Generación de Diffs Unificados (`diff.txt`):** Utiliza la biblioteca `diff` (`diffLines`) para reportar exactamente las líneas agregadas (`+`) o faltantes (`-`).
+- **Normalización Preventiva contra Falsos Negativos:** Colapsa saltos de línea y secuencias de espacios redundantes mediante `normalizeText` antes de la comparación.
+- **Manejo Defensivo de Selectores:** Si una página no cuenta con el selector evaluado (ej. `<main>`), la prueba se omite de forma controlada (`test.skip`) sin provocar falsos fallos en la suite.
+
+### 2. Validación Visual Estabilizada (Pixelmatch)
+
+La suite de regresión visual resuelve los principales desafíos de inconsistencia en renderizado web:
+
+1. **Aislamiento Visual por Inyección de CSS (`HIDE_DYNAMIC_ELEMENTS_CSS`):**
+   Oculta deliberadamente elementos que generan fluctuaciones de layout o altura:
+   - Políticas y banners de cookies: `.cookie-policy-container`, `.cookie-banner`, `#cookie-banner`.
+   - Cabeceras y navegación: `header`, `.headHome`, `.header-talet`.
+   - Pie de página: `footer`.
+   - Menús flotantes e interiores: `#MenuInterior`.
+   - Widgets de soporte y chat en vivo: `.crm`, `.ChatXS_Icon`.
+2. **Estabilización de Renderizado (`waitForPageStability`):**
+   Espera a que todas las fuentes web (`document.fonts.ready`) y las imágenes del documento (`img.complete`) estén totalmente cargadas.
+3. **Carga Forzada de Lazy Load (`forceLazyLoadRendering`):**
+   Realiza un scroll programado hasta el final de la página y regresa a la parte superior para activar elementos con carga diferida antes de la captura.
+4. **Recálculo de Layout (`forceLayoutRecalculation`):**
+   Dispara un evento `resize` para forzar a sliders, carruseles y componentes responsivos a calcular su posición final.
+5. **Detección de Elementos Atorados y Recarga Inteligente (_Smart Reload_):**
+   Si elementos críticos (como fichas técnicas: `.dato-ficha`, `.btn-ficha`) tienen altura o ancho en 0 por ejecución asíncrona de JavaScript, espera activamente hasta 4s. Si continúan atorados, ejecuta un `page.reload({ waitUntil: 'domcontentloaded' })` (evitando `networkidle` para prevenir bloqueos por analítica de terceros).
+6. **Protección de Buffers y Concurrencia:**
+   Desactiva animaciones CSS (`animations: 'disabled'`), introduce micro-pausas y valida que el buffer de imagen tenga una longitud adecuada (`length > 100`) para evitar buffers corruptos en ejecuciones paralelas.
+7. **Control Estricto de Dimensiones:**
+   Verifica el tamaño exacto (ancho x alto) antes de invocar `pixelmatch`. Si difieren, lanza un error descriptivo con las dimensiones para auditar el motivo del salto visual.
+8. **Trazabilidad Forense en Reintentos (`testInfo.retry`):**
+   Si un test falla y se reintenta según la política configurada (`retries: 1`), las evidencias se guardan con el sufijo `-Retry-1.png`, preservando la evidencia del intento inicial.
 
 ---
 
 ## 📂 Arquitectura del Proyecto
 
-A continuación se detalla la estructura del directorio raíz y la responsabilidad de cada componente clave:
+Estructura actual del directorio y propósito de cada componente:
 
 ```text
 content-migration-validator/
-├── data/                            # Datos generados dinámicamente
-│   ├── urls.json                    # URLs exitosamente rastreadas y listas para validación
-│   └── urls_rechazadas.json         # URLs omitidas en el crawling con su respectivo motivo
-├── scripts/                         # Scripts de ejecución y orquestación
-│   ├── crawl.js                     # Crawler dinámico basado en Playwright para descubrimiento de rutas
-│   ├── run-tests.js                 # Orquestador del flujo completo (crawling + testing total)
-│   └── run-text-test.js             # Orquestador optimizado (crawling + testing solo de texto plano)
-├── tests/                           # Suite de pruebas automatizadas
-│   ├── content-diff.spec.js         # Pruebas de comparación de texto plano entre entornos con generación de diff.txt
-│   └── visual-diff.spec.js          # (⚠️ En desarrollo / No funcional) Estructura reservada para regresión visual a nivel de píxel
-├── utils/                           # Módulos de soporte y utilerías comunes
-│   ├── dateTime.js                  # Formateador de fecha/hora para reportes con marcas de tiempo únicas
-│   ├── textNormalizaer.js           # Limpieza y normalización de espacios y saltos de línea en textos
-│   └── urlsNormalizaer.js           # Sanitizador de URLs (remoción de hashes, query params y trailing slashes)
-├── .env.example                     # Plantilla de configuración para variables de entorno
+├── data/                            # Datos dinámicos generados por el crawler
+│   ├── urls.json                    # Catálogo de URLs elegibles para testing
+│   └── urls_rechazadas.json         # Registro de URLs descartadas con su motivo
+├── scripts/                         # Scripts ejecutables y orquestadores
+│   ├── crawl.js                     # Crawler web basado en Playwright para descubrimiento de rutas
+│   ├── run-all-tests.js             # Orquestador principal (Crawler + Textos + Visual)
+│   ├── run-test-text.js             # Orquestador específico para pruebas de contenido textual
+│   └── run-test-visual.js           # Orquestador específico para pruebas de regresión visual
+├── tests/                           # Suites de pruebas automatizadas
+│   ├── content-diff.spec.js         # Validación de igualdad de texto y generación de diff.txt
+│   └── visual-diff.spec.js          # Validación visual pixel a pixel con pixelmatch y diff.png
+├── utils/                           # Módulos de soporte y funciones auxiliares
+│   ├── dateTime.js                  # Generador de marcas de tiempo únicas para directorios de reporte
+│   ├── textNormalizaer.js           # Limpieza y normalización de texto plano
+│   └── urlsNormalizaer.js           # Sanitizador de URLs (remoción de fragmentos, parámetros y trailing slash)
+├── .env.example                     # Plantilla de configuración de variables de entorno
 ├── .gitignore                       # Exclusiones de Git (node_modules, reportes, archivos .env locales)
-├── package.json                     # Definición del proyecto, dependencias y scripts NPM
-├── playwright.config.js             # Configuración centralizada de Playwright Test
-└── README.md                        # Guía de uso y documentación del proyecto
+├── package.json                     # Scripts de ejecución NPM y dependencias
+├── playwright.config.js             # Configuración central de Playwright (concurrencia, timeout, reporters)
+└── README.md                        # Documentación técnica completa del proyecto
 ```
-
-### Detalle de Componentes Clave:
-
-- **`scripts/crawl.js`**: Utiliza un navegador Chromium headless para extraer los enlaces `a[href]` de la página de inicio original. Aplica filtros restrictivos para no salir del dominio base, ignorar extensiones de archivos estáticos (PDF, ZIP, imágenes) y omitir rutas configuradas como excluidas (ej: `/twitter`).
-- **`tests/content-diff.spec.js`**: Lee recursivamente `data/urls.json` y, para cada ruta encontrada, abre de forma paralela la página correspondiente en el servidor original y en el servidor nuevo. Extrae el texto interno del selector configurado (por defecto `main` para evitar diferencias de cabeceras/pies de página), realiza una aserción de igualdad y genera evidencias de texto (`original.txt`, `nuevo.txt`) y diferencias (`diff.txt` si aplica) en el reporte.
-- **`tests/visual-diff.spec.js`**: _(⚠️ Proceso no terminado / En desarrollo)_ Estructura reservada para futuras comparaciones de diseño visual a nivel de píxel (_screenshot regression_). Actualmente se encuentra en desarrollo y no se garantiza su correcto funcionamiento. Por ello, no se dispone de un script directo en `package.json` para ejecutarlo de manera aislada.
-- **`utils/textNormalizaer.js`**: Evita falsos negativos en las pruebas al colapsar múltiples espacios continuos, tabulaciones y saltos de línea en un solo espacio antes de realizar la comparación.
-- **`utils/urlsNormalizaer.js`**: Sanitiza y normaliza las URLs descubiertas durante el crawling para evitar registros duplicados. Remueve anclas hash (`#`), elimina parámetros de tracking/sesión específicos (como `COT` y `PM`), y estandariza la presencia del _trailing slash_ (`/`) al final de las rutas.
 
 ---
 
 ## 🛠️ Prerrequisitos e Instalación
 
-### Requisitos del Entorno
+### Requisitos del Sistema
 
-- **Node.js**: Versión `v18.x` o superior (se recomienda LTS).
-- **NPM**: Gestor de paquetes integrado de Node (v9.x o superior).
+- **Node.js:** Versión `v18.x` o superior (se recomienda LTS).
+- **NPM:** Gestor de paquetes integrado de Node (v9.x o superior).
 
 ### Instrucciones de Configuración
 
@@ -113,7 +156,7 @@ content-migration-validator/
    npm install
    ```
 
-3. **Instalar los navegadores de Playwright** (Chromium es el navegador configurado por defecto):
+3. **Instalar el navegador de Playwright** (Chromium es el navegador configurado):
    ```bash
    npx playwright install chromium
    ```
@@ -122,7 +165,7 @@ content-migration-validator/
 
 ## ⚙️ Variables de Entorno
 
-El proyecto lee la configuración de un archivo `.env` ubicado en la raíz. Para configurarlo, realiza una copia del archivo de ejemplo y ajusta sus valores:
+El proyecto lee la configuración de un archivo `.env` en la raíz. Para configurarlo, crea una copia de `.env.example`:
 
 ```bash
 cp .env.example .env
@@ -131,28 +174,32 @@ cp .env.example .env
 Abre el archivo `.env` y define los dominios que deseas auditar:
 
 ```env
-# URL del sitio actual/antiguo de referencia
+# URL del sitio actual/antiguo de referencia (Original)
 BASE_URL_ORIGINAL=https://sitio-original.com
 
-# URL del nuevo sitio migrado a validar
+# URL del nuevo sitio migrado a validar (Nuevo)
 BASE_URL_NUEVO=https://sitio-nuevo.com
 ```
 
-> [!IMPORTANT]  
-> Asegúrate de no incluir una barra diagonal al final (`/`) de los dominios para evitar problemas en la concatenación de las rutas.
+> [!TIP]
+> **Estrategia Baseline:** Para validar la estabilidad de la herramienta, se recomienda apuntar `BASE_URL_ORIGINAL` y `BASE_URL_NUEVO` a la misma URL de control. El resultado esperado debe ser **0 diferencias** visuales y textuales. Una vez comprobada la estabilidad, modifica `BASE_URL_NUEVO` hacia el sitio migrado real.
+
+> [!IMPORTANT]
+> Asegúrate de no incluir una barra diagonal (`/`) al final de los dominios en las variables de entorno para evitar errores en la concatenación de las rutas.
 
 ---
 
 ## 🧪 Ejecución de Pruebas
 
-El proyecto cuenta con múltiples scripts de ejecución en su [`package.json`](file:///c:/.../content-migration-validator/package.json):
+El proyecto cuenta con scripts centralizados en el [`package.json`](file:///c:/.../content-migration-validator/package.json):
 
-| Comando                         | Descripción                                                                                                                          |
-| :------------------------------ | :----------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test` o `npm run Alltests` | Ejecuta el ciclo completo (rastrea URLs y corre toda la suite, incluyendo la prueba visual que está en fase de desarrollo).          |
-| `npm run test:texts`            | Ejecuta el ciclo recomendado y estable: rastreo de URLs y únicamente pruebas de comparación de Texto plano (`content-diff.spec.js`). |
+| Comando               | Descripción                                                                                                                                                                     |
+| :-------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `npm test`            | **Suite Completa:** Ejecuta el crawler y corre en secuencia las pruebas de texto (`content-diff.spec.js`) y visuales (`visual-diff.spec.js`), generando un resumen consolidado. |
+| `npm run test:text`   | **Solo Textos:** Ejecuta el crawler y corre exclusivamente la validación de texto plano.                                                                                        |
+| `npm run test:visual` | **Solo Visual:** Ejecuta el crawler y corre exclusivamente la validación visual pixel a pixel.                                                                                  |
 
-### 1. Ejecución y Depuración Individual
+### Ejecución y Depuración Individual
 
 Si necesitas aislar o depurar un paso en específico del flujo sin usar los scripts orquestadores:
 
@@ -163,61 +210,70 @@ Si necesitas aislar o depurar un paso en específico del flujo sin usar los scri
   node scripts/crawl.js
   ```
 
-- **Ejecutar solo la comparación de textos:**
-  _(Requiere haber generado previamente el archivo `data/urls.json`)_:
+- **Ejecutar solo la comparación de textos (sin re-rastrear):**
+  _(Requiere haber generado previamente `data/urls.json`)_:
 
   ```bash
   npx playwright test tests/content-diff.spec.js
   ```
 
-- **Ejecutar la comparación visual (En desarrollo):**
-  _(⚠️ Esta suite no es completamente funcional y se encuentra en etapa experimental. Requiere `data/urls.json` previo)_:
+- **Ejecutar solo la comparación visual (sin re-rastrear):**
+  _(Requiere haber generado previamente `data/urls.json`)_:
 
   ```bash
   npx playwright test tests/visual-diff.spec.js
   ```
 
-- **Ejecutar pruebas en Modo Interactivo (UI Mode de Playwright):**
-  Excelente para ver el flujo de navegación visualmente y depurar fallas paso a paso con herramientas de trazabilidad:
+- **Ejecutar pruebas en Modo Interactivo (Playwright UI Mode):**
+  Excelente para ver el flujo de navegación visualmente y depurar fallas paso a paso con trazabilidad interactiva:
   ```bash
   npx playwright test --ui
   ```
 
 ---
 
-## 📊 Reportes de Prueba
+## 📊 Estructura de Reportes y Evidencias
 
-Los scripts orquestadores definen dinámicamente un directorio para guardar los reportes basado en la fecha y hora de ejecución, bajo la ruta `playwright-report/Fecha-YYYY-MM-DD_Hora-HH-MM-SS/`.
+Los scripts orquestadores crean dinámicamente un directorio basado en la fecha y hora de ejecución bajo la ruta `playwright-report/Fecha-YYYY-MM-DD_Hora-HH-MM-SS/`:
 
-### Estructura de Reportes Generados
-
-Al finalizar cada suite de pruebas, se crean los siguientes archivos en la carpeta correspondiente:
-
-- **Reporte HTML Interactivo:** Ubicado en `playwright-report/<carpeta_ejecución>/html/index.html`. Contiene el desglose de cada prueba ejecutada, logs de pasos y detalles de aserciones.
-- **Resultados en Formato JSON:** Ubicado en `playwright-report/<carpeta_ejecución>/results.json`. Ideal para integraciones con CI/CD u otros procesadores de datos.
-- **Evidencias de Texto:** Guardadas en `playwright-report/<carpeta_ejecución>/test-results/text/<nombre-pagina>/` (`original.txt`, `nuevo.txt` y `diff.txt` si hay desajustes).
-- **Capturas y Trazas de Fallos:** En caso de fallas en Playwright, se guardarán capturas de pantalla (`screenshots`) y videos dentro del subdirectorio `test-results/`.
+```text
+playwright-report/Fecha-2026-09-14_Hora-09-30-15/
+├── html/
+│   └── index.html                # Reporte HTML interactivo con estadísticas y logs de pasos
+├── results.json                  # Resultados estructurados en formato JSON (ideal para CI/CD)
+├── Evidencias-Textos/            # Evidencias de comparación de contenido textual
+│   └── <nombre-ruta>/
+│       ├── original.txt          # Texto plano obtenido del sitio original
+│       ├── nuevo.txt             # Texto plano obtenido del sitio nuevo
+│       └── diff.txt              # (Solo si hay fallo) Diferencias línea por línea (+/-)
+└── Evidencias-Capturas/          # Evidencias de comparación visual
+    └── <nombre-ruta>/
+        ├── original.png          # Captura del selector en el sitio original
+        ├── nuevo.png             # Captura del selector en el sitio nuevo
+        ├── diff.png              # (Solo si hay fallo) Imagen comparativa resaltando píxeles dispares
+        ├── original-Retry-1.png  # Evidencias preservadas en caso de reintentos
+        └── nuevo-Retry-1.png
+```
 
 ### Comando para Visualizar el Reporte HTML
 
-Para abrir el servidor local de Playwright y visualizar de forma interactiva el reporte HTML generado en una ejecución específica:
+Para abrir el servidor local de Playwright y visualizar el reporte HTML generado en una ejecución específica:
 
 ```bash
-npx playwright show-report playwright-report/Fecha-XXXX-XX-XX_Hora-XX-XX-XX/html
+npx playwright show-report playwright-report/Fecha-YYYY-MM-DD_Hora-HH-MM-SS/html
 ```
 
-_(Sustituye `Fecha-XXXX-XX-XX_Hora-XX-XX-XX` por la carpeta temporal generada e impresa en consola al inicio de la ejecución)._
+_(Sustituye `Fecha-YYYY-MM-DD_Hora-HH-MM-SS` por la carpeta generada e impresa en consola al inicio de la ejecución)._
 
 ---
 
-## 🎨 Patrón de Diseño y Buenas Prácticas
+## 🎨 Patrones de Diseño y Buenas Prácticas QA
 
-Este validador ha sido diseñado bajo estándares estrictos de calidad en automatización QA:
-
-- **Data-Driven Testing (DDT):** Los casos de prueba no están programados de forma estática en el código. El archivo de prueba `content-diff.spec.js` itera dinámicamente sobre la colección de rutas generadas en `data/urls.json`. Esto permite que el mismo código sirva para validar sitios de 5 páginas o de 500 páginas sin modificaciones adicionales.
+- **Data-Driven Testing (DDT):** Los casos de prueba no están cableados estáticamente. Las suites leen e iteran dinámicamente sobre la colección registrada en `data/urls.json`, lo que permite validar tanto sitios pequeños como portales con cientos de páginas sin alterar el código de prueba.
 - **Separación de Responsabilidades (SoC):**
-  - La lógica de normalización de textos y URLs se desacopla en la carpeta `utils/`.
-  - La configuración del navegador, concurrencia y reportería se delega completamente a `playwright.config.js`.
-  - Las credenciales e URLs del sitio web se extraen a través de variables de entorno administradas por `dotenv`.
-- **Pruebas en Paralelo:** Aprovechando las bondades de Playwright, la configuración tiene habilitado `fullyParallel: true` y un límite controlado de `workers: 4`, lo que reduce considerablemente el tiempo total de ejecución de la suite al consultar múltiples URLs de manera simultánea.
-- **Normalización Preventiva contra Falsos Negativos:** El formateador de textos evita fallas por diferencias menores en estilos CSS (como un simple salto de línea o un espacio extra que no altera visualmente el contenido pero sí la aserción de texto plano).
+  - El crawling y descubrimiento de enlaces reside en `scripts/crawl.js` con sanitización en `utils/urlsNormalizaer.js`.
+  - La normalización de texto y manejo temporal se abstraen en `utils/textNormalizaer.js` y `utils/dateTime.js`.
+  - Las suites de testing (`tests/`) permanecen desacopladas entre sí.
+  - La configuración general de entorno, timeouts y concurrencia se administra centralizadamente en `playwright.config.js`.
+- **Ejecución Concurrente y Optimizada:** Configurado con `fullyParallel: true`, un límite controlado de `workers: 4` y un viewport estándar de `1920x1080` en Chromium, optimizando los tiempos de ejecución y manteniendo la estabilidad de memoria del sistema.
+- **Trazabilidad y Análisis Forense:** En caso de fallas, la generación simultánea de archivos de origen (`original`), destino (`nuevo`) y comparación (`diff`) reduce drásticamente el tiempo de análisis de causa raíz para el equipo de QA y desarrollo.

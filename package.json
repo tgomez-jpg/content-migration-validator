@@ -4,9 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node scripts/run-tests.js",
-    "test:texts": "node scripts/run-text-test.js",
-    "Alltests": "node scripts/run-tests.js"
+    "test": "node scripts/run-all-tests.js",
+    "test:text": "node scripts/run-test-text.js",
+    "test:visual": "node scripts/run-test-visual.js"
   },
   "keywords": [],
   "author": "",
